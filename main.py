@@ -1,8 +1,75 @@
-from concurrent.futures import process
 import csv
 import struct
 import math
+from auxiliary import string2hex, nocarryforward, get_rbytes 
 
+def main():
+  
+# ------------- dword hex values extracted during debugging of stage 1 -----------
+  with open('./stack.txt', 'r') as file:
+    for line in file:
+      line = line.strip('\n')
+      line = line.lstrip('00')
+      key,val = line.split(',')
+      stack_hexes[int(key,16)] = int(val,16)
+
+# ------------- reading text to encrypt from .dat file -------------------
+  with open('./input.dat', 'r') as file:
+    text = file.read()
+  
+  # --------- stage 2 key extracted during debugging ---------------------
+  with open('./s2_key.txt', 'r') as file:
+    for line in file:
+      s2_key = line.split(' ')  # ----> ascii Q38B7[JPX4p$A`b]Em2/V@%c)Nl6GroRque+UhCsSid5j'>;^1(O=!LK\I"F*Y9,<T.WZ_&t?fDMan:#-k0Hg
+      s2_key = [int(('0x'+chr),16) for chr in s2_key]
+  
+  text_length = len(text)
+  
+  # ------- text padding --------------------------------------
+  if text_length % 8 != 0:
+    pad_length = (8 - text_length % 8)
+    pad_chr = bytes.fromhex('0'+str(pad_length)).decode('cp1252')
+    pad_text = text + pad_chr*pad_length
+  else:
+    pad_text = text
+  
+  pad_text_list = list(map(''.join, zip(*[iter(pad_text)]*4)))
+  
+  step = 2
+  length = len(pad_text_list)
+  index = 0
+  
+  # --------- executing stage 1 encryption -----------------------
+  for index in range(0,length,2):
+    s1_output = fun4033f4(pad_text_list,stack_start,index)
+
+  #----------- processing stage 1 output for stage 2 ---------------------------
+  s1_output = [int(chr,16) for chr in s1_output]
+
+  processed = []
+
+  for i in range(0,len(s1_output),4):
+    processed.append(hex(((((((s1_output[i] << 8) | s1_output[i+1]) << 8) | s1_output[i+2]) << 8) | s1_output[i+3])))
+  
+  s2_dict = dict(zip(s2_addr,s2_key))
+  
+  #---------- executing stage 2 encryption ----------------------------------
+  for hexstr in processed:
+    i  = 4
+    while i > -1:
+      remainder = int(hex(int(hexstr,16) % 0x55),16)
+      s2_output.append(s2_dict[s2_saddr + remainder])
+      # print(hex(s2_saddr + remainder))
+      i-=1
+      hexstr = '0x{:x}'.format(int(int(hexstr,16) / 0x55))
+      
+  
+  raw_string = ''.join([bytes.fromhex(hex(i).lstrip('0x')).decode('utf-8') for i in s2_output])
+  output = ''.join([i[::-1] for i in list(map(''.join, zip(*[iter(raw_string)]*5)))])
+  
+  foutput = open('output.dat', 'w')
+  foutput.write(output)
+  foutput.close()
 
 # ------------------------------STAGE 1-----------------------------------------------------------
 #--> @ret fun40377C
@@ -270,8 +337,7 @@ def fun4033f4(txt,stack_start,index):
   
   return s1_output
 
-if __name__ == '__main__':
-
+if __name__=='__main__':
   stack_hexes = {}
   stack_start = 0x60EDD8
   stack_end = 0x60FDD8
@@ -280,93 +346,5 @@ if __name__ == '__main__':
   s2_key = []
   s2_addr = [s2_saddr + i for i in range(85)]
   s2_output = []
+  main()
 
-# ------------- dword hex values extracted during debugging of stage 1 -----------
-
-  with open('./stack.txt', 'r') as file:
-    for line in file:
-      line = line.strip('\n')
-      line = line.lstrip('00')
-      key,val = line.split(',')
-      stack_hexes[int(key,16)] = int(val,16)
-
-# ------------- reading text to encrypt from .dat file -------------------
-  with open('./input.dat', 'r') as file:
-    text = file.read()
-  
-  # --------- stage 2 key extracted during debugging ---------------------
-
-  with open('./s2_key.txt', 'r') as file:
-    for line in file:
-      s2_key = line.split(' ')  # ----> ascii Q38B7[JPX4p$A`b]Em2/V@%c)Nl6GroRque+UhCsSid5j'>;^1(O=!LK\I"F*Y9,<T.WZ_&t?fDMan:#-k0Hg
-      s2_key = [int(('0x'+chr),16) for chr in s2_key]
-  
-  # --------- auxiliary functions -----------
-
-  def string2hex(s):
-    slist = list(s)
-    hex_str = '0x'+''.join([chr.encode('cp1252').hex() for chr in slist])
-    return int(hex_str,16)
-  
-  def nocarryforward(val):
-    if len(hex(val).lstrip('0x')) > 8:
-      return int('0x'+hex(val)[-8:],16)
-    else:
-      return val
-
-  def get_rbytes(val,n):
-    if len(hex(val).lstrip('0x')) == 1:
-      return int(hex(val),16)
-    else:
-      return int('0x'+hex(val)[-2*n:],16)
-
-  text_length = len(text)
-  
-  # ------- text padding --------------------------------------
-
-  if text_length % 8 != 0:
-    pad_length = (8 - text_length % 8)
-    pad_chr = bytes.fromhex('0'+str(pad_length)).decode('cp1252')
-    pad_text = text + pad_chr*pad_length
-  else:
-    pad_text = text
-  
-  pad_text_list = list(map(''.join, zip(*[iter(pad_text)]*4)))
-  
-  step = 2
-  length = len(pad_text_list)
-  index = 0
-  
-  # --------- executing stage 1 encryption -----------------------
-
-  for index in range(0,length,2):
-    s1_output = fun4033f4(pad_text_list,stack_start,index)
-
-  #----------- processing stage 1 output for stage 2 ---------------------------
-
-  s1_output = [int(chr,16) for chr in s1_output]
-
-  processed = []
-
-  for i in range(0,len(s1_output),4):
-    processed.append(hex(((((((s1_output[i] << 8) | s1_output[i+1]) << 8) | s1_output[i+2]) << 8) | s1_output[i+3])))
-  
-  s2_dict = dict(zip(s2_addr,s2_key))
-  
-  #---------- executing stage 2 encryption ----------------------------------
-  for hexstr in processed:
-    i  = 4
-    while i > -1:
-      remainder = int(hex(int(hexstr,16) % 0x55),16)
-      s2_output.append(s2_dict[s2_saddr + remainder])
-      # print(hex(s2_saddr + remainder))
-      i-=1
-      hexstr = '0x{:x}'.format(int(int(hexstr,16) / 0x55))
-      
-  
-  raw_string = ''.join([bytes.fromhex(hex(i).lstrip('0x')).decode('utf-8') for i in s2_output])
-  output = ''.join([i[::-1] for i in list(map(''.join, zip(*[iter(raw_string)]*5)))])
-  
-  foutput = open('output.dat', 'w')
-  foutput.write(output)
-  foutput.close()
