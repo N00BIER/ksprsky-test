@@ -59,7 +59,6 @@ def main():
     while i > -1:
       remainder = int(hex(int(hexstr,16) % 0x55),16)
       s2_output.append(s2_dict[s2_saddr + remainder])
-      # print(hex(s2_saddr + remainder))
       i-=1
       hexstr = '0x{:x}'.format(int(int(hexstr,16) / 0x55))
       
